@@ -15,6 +15,12 @@
 #define WINDOW_HEIGHT 600
 #define WINDOW_TITLE "SDL Sound Test - Async Audio Demo"
 
+// Structure to record sound events
+struct SoundEvent {
+    std::string soundName;
+    Uint64 timestamp;
+};
+
 // Sound structure to manage individual sounds
 struct Sound {
     SDL_AudioStream* stream;
@@ -143,8 +149,18 @@ private:
     SDL_AudioDeviceID deviceId;
     std::map<std::string, std::unique_ptr<Sound>> sounds;
     
+    // Recording variables
+    bool isRecording;
+    Uint64 recordingStartTime;
+    std::vector<SoundEvent> recordedEvents;
+    bool isPlaying;
+    Uint64 playbackStartTime;
+    size_t currentEventIndex;
+    
 public:
-    SoundManager(SDL_AudioDeviceID device) : deviceId(device) {}
+    SoundManager(SDL_AudioDeviceID device) 
+        : deviceId(device), isRecording(false), recordingStartTime(0), 
+          isPlaying(false), playbackStartTime(0), currentEventIndex(0) {}
     
     ~SoundManager() {
         // The unique_ptrs will clean up the Sound objects
@@ -170,13 +186,88 @@ public:
         }
         
         it->second->play(durationMs);
+        
+        // If recording, add this event
+        if (isRecording) {
+            SoundEvent event;
+            event.soundName = name;
+            event.timestamp = SDL_GetTicks() - recordingStartTime;
+            recordedEvents.push_back(event);
+            SDL_Log("Recorded event: %s at %llu ms", name.c_str(), event.timestamp);
+        }
+        
         return true;
+    }
+    
+    // Start recording
+    void startRecording() {
+        if (!isRecording) {
+            recordedEvents.clear();
+            recordingStartTime = SDL_GetTicks();
+            isRecording = true;
+            SDL_Log("Recording started");
+        }
+    }
+    
+    // Stop recording
+    void stopRecording() {
+        if (isRecording) {
+            isRecording = false;
+            SDL_Log("Recording stopped - %zu events recorded", recordedEvents.size());
+        }
+    }
+    
+    // Start playback of recorded events
+    void startPlayback() {
+        if (!recordedEvents.empty() && !isPlaying) {
+            isPlaying = true;
+            playbackStartTime = SDL_GetTicks();
+            currentEventIndex = 0;
+            SDL_Log("Playback started - %zu events to play", recordedEvents.size());
+        } else if (recordedEvents.empty()) {
+            SDL_Log("No recorded events to play");
+        }
+    }
+    
+    // Stop playback
+    void stopPlayback() {
+        if (isPlaying) {
+            isPlaying = false;
+            SDL_Log("Playback stopped");
+        }
+    }
+    
+    // Update playback (check for events to play)
+    void updatePlayback() {
+        if (isPlaying && currentEventIndex < recordedEvents.size()) {
+            Uint64 currentTime = SDL_GetTicks() - playbackStartTime;
+            
+            // Play all events due at this time
+            while (currentEventIndex < recordedEvents.size() && 
+                   recordedEvents[currentEventIndex].timestamp <= currentTime) {
+                const SoundEvent& event = recordedEvents[currentEventIndex];
+                playSound(event.soundName);
+                SDL_Log("Playing recorded event: %s at %llu ms", event.soundName.c_str(), currentTime);
+                currentEventIndex++;
+            }
+            
+            // Check if we've reached the end
+            if (currentEventIndex >= recordedEvents.size()) {
+                SDL_Log("Playback completed");
+                // Keep isPlaying true to prevent repeating
+            }
+        }
     }
     
     // Update all sounds
     void update() {
         for (auto& pair : sounds) {
             pair.second->update();
+        }
+        
+        // Update playback if needed
+        if (isPlaying) {
+            updatePlayback();
         }
     }
     
@@ -189,6 +280,16 @@ public:
             }
         }
         return count;
+    }
+    
+    // Is recording in progress?
+    bool isCurrentlyRecording() const {
+        return isRecording;
+    }
+    
+    // Is playback in progress?
+    bool isCurrentlyPlaying() const {
+        return isPlaying;
     }
     
     // Give access to the sounds for rendering
@@ -238,18 +339,27 @@ void RenderPlayingSounds(SDL_Renderer *renderer, SoundManager& soundManager, con
         i++;
     }
     
-    // Display count of playing sounds
-    int playingCount = soundManager.getPlayingCount();
+    // Display recording/playback status
     const int boxHeight = 30;
     const int boxWidth = 200;
     
-    SDL_FRect countBox = {
+    SDL_FRect statusBox = {
         10.0f, 10.0f,
         static_cast<float>(boxWidth), static_cast<float>(boxHeight)
     };
     
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 180);
-    SDL_RenderFillRect(renderer, &countBox);
+    if (soundManager.isCurrentlyRecording()) {
+        // Red for recording
+        SDL_SetRenderDrawColor(renderer, 255, 40, 40, 200);
+    } else if (soundManager.isCurrentlyPlaying()) {
+        // Green for playback
+        SDL_SetRenderDrawColor(renderer, 40, 255, 40, 200);
+    } else {
+        // Black for idle
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 180);
+    }
+    
+    SDL_RenderFillRect(renderer, &statusBox);
 }
 
 int main(int argc, char* argv[]) {
@@ -297,6 +407,7 @@ int main(int argc, char* argv[]) {
     
     // Define a sequence of frequencies for musical notes
     std::vector<double> frequencies = {
+        247.48, // C3
         261.63, // C4
         293.66, // D4
         329.63, // E4
@@ -304,7 +415,8 @@ int main(int argc, char* argv[]) {
         392.00, // G4
         440.00, // A4
         493.88, // B4
-        523.25  // C5
+        523.25, // C5
+        554.37, // C#5
     };
     
     // Create the sound manager
@@ -330,6 +442,8 @@ int main(int argc, char* argv[]) {
     // Display instructions
     SDL_Log("Press keys 1-8 to play individual notes");
     SDL_Log("Press C to play a C major chord");
+    SDL_Log("Press S to start/stop recording");
+    SDL_Log("Press D to play back recorded music");
     SDL_Log("Press A to quit");
     
     // While application is running
@@ -347,6 +461,25 @@ int main(int argc, char* argv[]) {
                         SDL_Log("'A' key pressed. Exiting...");
                         quit = true;
                         break;
+                        
+                    case SDLK_S:
+                        // Toggle recording
+                        if (soundManager.isCurrentlyRecording()) {
+                            soundManager.stopRecording();
+                        } else {
+                            soundManager.startRecording();
+                        }
+                        break;
+                        
+                    case SDLK_D:
+                        // Start playback of recorded music
+                        if (!soundManager.isCurrentlyPlaying()) {
+                            soundManager.startPlayback();
+                        } else {
+                            soundManager.stopPlayback();
+                        }
+                        break;
+                    case SDLK_0:
                     case SDLK_1:
                     case SDLK_2:
                     case SDLK_3:
@@ -354,8 +487,9 @@ int main(int argc, char* argv[]) {
                     case SDLK_5:
                     case SDLK_6:
                     case SDLK_7:
-                    case SDLK_8: {
-                        int noteIndex = e.key.key - SDLK_1;
+                    case SDLK_8:
+                    case SDLK_9: {
+                        int noteIndex = e.key.key - SDLK_0;
                         std::string noteName = "note" + std::to_string(noteIndex);
                         soundManager.playSound(noteName);
                         SDL_Log("Playing note %d (%.2f Hz)", noteIndex + 1, frequencies[noteIndex]);
