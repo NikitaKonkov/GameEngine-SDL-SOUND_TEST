@@ -178,25 +178,30 @@ public:
         return true;
     }
     
-    // Play a sound
+    // Play a sound only if it's not already playing
     bool playSound(const std::string& name, int durationMs = 0) {
         auto it = sounds.find(name);
         if (it == sounds.end()) {
             return false;
         }
         
-        it->second->play(durationMs);
-        
-        // If recording, add this event
-        if (isRecording) {
-            SoundEvent event;
-            event.soundName = name;
-            event.timestamp = SDL_GetTicks() - recordingStartTime;
-            recordedEvents.push_back(event);
-            SDL_Log("Recorded event: %s at %llu ms", name.c_str(), event.timestamp);
+        // Only play if the sound isn't already playing
+        if (!it->second->playing) {
+            it->second->play(durationMs);
+            
+            // If recording, add this event
+            if (isRecording) {
+                SoundEvent event;
+                event.soundName = name;
+                event.timestamp = SDL_GetTicks() - recordingStartTime;
+                recordedEvents.push_back(event);
+                SDL_Log("Recorded event: %s at %llu ms", name.c_str(), event.timestamp);
+            }
+            
+            return true;
         }
         
-        return true;
+        return false;  // Sound was already playing
     }
     
     // Start recording
@@ -269,6 +274,15 @@ public:
         if (isPlaying) {
             updatePlayback();
         }
+    }
+    
+    // Check if a specific sound is currently playing
+    bool isSoundPlaying(const std::string& name) {
+        auto it = sounds.find(name);
+        if (it != sounds.end()) {
+            return it->second->playing;
+        }
+        return false;
     }
     
     // Get number of sounds currently playing
@@ -364,7 +378,7 @@ void RenderPlayingSounds(SDL_Renderer *renderer, SoundManager& soundManager, con
 
 int main(int argc, char* argv[]) {
     // Initialize SDL with both video and audio
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
+    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't initialize SDL: %s", SDL_GetError());
         return -1;
     }
@@ -445,6 +459,7 @@ int main(int argc, char* argv[]) {
     SDL_Log("Press S to start/stop recording");
     SDL_Log("Press D to play back recorded music");
     SDL_Log("Press A to quit");
+    SDL_Log("Note: The same note won't play again until the current one finishes");
     
     // While application is running
     while (!quit) {
@@ -479,7 +494,7 @@ int main(int argc, char* argv[]) {
                             soundManager.stopPlayback();
                         }
                         break;
-                    case SDLK_0:
+                        
                     case SDLK_1:
                     case SDLK_2:
                     case SDLK_3:
@@ -488,19 +503,34 @@ int main(int argc, char* argv[]) {
                     case SDLK_6:
                     case SDLK_7:
                     case SDLK_8:
-                    case SDLK_9: {
-                        int noteIndex = e.key.key - SDLK_0;
+                    case SDLK_9:{
+                        int noteIndex = e.key.key - SDLK_1;
                         std::string noteName = "note" + std::to_string(noteIndex);
-                        soundManager.playSound(noteName);
-                        SDL_Log("Playing note %d (%.2f Hz)", noteIndex + 1, frequencies[noteIndex]);
+                        
+                        // Only play if the note isn't already playing
+                        if (!soundManager.isSoundPlaying(noteName)) {
+                            if (soundManager.playSound(noteName)) {
+                                SDL_Log("Playing note %d (%.2f Hz)", noteIndex + 1, frequencies[noteIndex]);
+                            }
+                        } else {
+                            SDL_Log("Note %d is already playing", noteIndex + 1);
+                        }
                         break;
                     }
                     case SDLK_C:
-                        // Play a C major chord (C, E, G together)
-                        soundManager.playSound("chord1");
-                        soundManager.playSound("chord2");
-                        soundManager.playSound("chord3");
-                        SDL_Log("Playing C major chord");
+                        // Only play chord if all notes aren't already playing
+                        if (!soundManager.isSoundPlaying("chord1") && 
+                            !soundManager.isSoundPlaying("chord2") && 
+                            !soundManager.isSoundPlaying("chord3")) {
+                            
+                            // Play a C major chord (C, E, G together)
+                            soundManager.playSound("chord1");
+                            soundManager.playSound("chord2");
+                            soundManager.playSound("chord3");
+                            SDL_Log("Playing C major chord");
+                        } else {
+                            SDL_Log("Chord is already playing");
+                        }
                         break;
                 }
             }
