@@ -4,78 +4,252 @@
 #include <SDL3/SDL.h>
 #include <cmath>
 #include <vector>
+#include <map>
+#include <string>
+#include <memory>
 
 #define M_PI 3.14159265358979323846
 
 // Window dimensions
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 600
-#define WINDOW_TITLE "SDL Sound Test"
+#define WINDOW_TITLE "SDL Sound Test - Async Audio Demo"
 
-// Audio callback function to generate a sine wave
-void AudioCallback(void *userdata, SDL_AudioStream *stream, int additional_amount, int total_amount) {
-    // Get the current frequency from userdata
-    double *frequency = static_cast<double*>(userdata);
-    static double phase = 0.0;
+// Sound structure to manage individual sounds
+struct Sound {
+    SDL_AudioStream* stream;
+    double frequency;
+    float gain;
+    bool playing;
+    Uint64 startTime;
+    int durationMs;
+    int fadeMs; // Fade out time in milliseconds
     
-    // Generate a sine wave with the current frequency
-    const int sample_rate = 48000;  // CD quality
-    const double phase_increment = 2.0 * M_PI * (*frequency) / sample_rate;
-    
-    // Calculate how many samples we need
-    const int sample_size = sizeof(float);
-    const int num_samples = additional_amount / sample_size;
-    
-    // Allocate buffer for our samples
-    float *buffer = static_cast<float*>(SDL_malloc(num_samples * sample_size));
-    if (!buffer) {
-        return;
-    }
-    
-    // Fill the buffer with sine wave data
-    for (int i = 0; i < num_samples; ++i) {
-        buffer[i] = static_cast<float>(0.3 * sin(phase)); // 0.3 for volume (30%)
-        phase += phase_increment;
-        if (phase > 2.0 * M_PI) {
-            phase -= 2.0 * M_PI; // Keep phase in the range [0, 2π]
+    Sound(SDL_AudioDeviceID deviceId, double freq, float g = 0.3f, int durMs = 0, int fadeoutMs = 100) 
+        : frequency(freq), gain(g), playing(false), startTime(0), durationMs(durMs), fadeMs(fadeoutMs) {
+        
+        // Set up audio spec for this sound
+        SDL_AudioSpec spec;
+        SDL_zero(spec);
+        spec.format = SDL_AUDIO_F32;
+        spec.channels = 1;
+        spec.freq = 48000;
+        
+        // Create the audio stream
+        stream = SDL_CreateAudioStream(&spec, &spec);
+        
+        if (stream) {
+            // Set the stream's gain
+            SDL_SetAudioStreamGain(stream, gain);
+            
+            // Bind the stream to the device
+            SDL_BindAudioStream(deviceId, stream);
         }
     }
     
-    // Add data to the audio stream
-    SDL_PutAudioStreamData(stream, buffer, num_samples * sample_size);
+    ~Sound() {
+        if (stream) {
+            SDL_UnbindAudioStream(stream);
+            SDL_DestroyAudioStream(stream);
+        }
+    }
     
-    // Free our buffer
-    SDL_free(buffer);
-}
+    // Apply amplitude envelope to the sample (fadeIn/fadeOut)
+    float applyEnvelope(int sampleIndex, int totalSamples, float value) {
+        const int fadeInSamples = 480; // 10ms at 48kHz
+        const int fadeOutSamples = (fadeMs * 48000) / 1000; // Convert fadeMs to samples
+        
+        // Apply fade-in (first 10ms)
+        if (sampleIndex < fadeInSamples) {
+            float fadeInFactor = static_cast<float>(sampleIndex) / fadeInSamples;
+            value *= fadeInFactor;
+        }
+        
+        // Apply fade-out (last fadeOutSamples)
+        if (sampleIndex > totalSamples - fadeOutSamples) {
+            float fadeOutFactor = static_cast<float>(totalSamples - sampleIndex) / fadeOutSamples;
+            value *= fadeOutFactor;
+        }
+        
+        return value;
+    }
+    
+    // Fill the stream with sine wave data with smooth envelope
+    void generateSineWave(int durationMs) {
+        if (!stream || !durationMs) return;
+        
+        const int sample_rate = 48000;  // CD quality
+        const double phase_increment = 2.0 * M_PI * frequency / sample_rate;
+        const int numSamples = (sample_rate * durationMs) / 1000;
+        const int bufferSize = numSamples * sizeof(float);
+        
+        float* buffer = static_cast<float*>(SDL_malloc(bufferSize));
+        if (!buffer) return;
+        
+        // Generate sine wave with envelope
+        double phase = 0.0;
+        for (int i = 0; i < numSamples; i++) {
+            // Apply amplitude envelope to avoid clicks
+            float sampleValue = static_cast<float>(sin(phase));
+            buffer[i] = applyEnvelope(i, numSamples, 0.3f * sampleValue);
+            
+            phase += phase_increment;
+            if (phase > 2.0 * M_PI) {
+                phase -= 2.0 * M_PI;
+            }
+        }
+        
+        // Add data to the stream
+        SDL_PutAudioStreamData(stream, buffer, bufferSize);
+        
+        // Free the buffer
+        SDL_free(buffer);
+    }
+    
+    // Start playing the sound
+    void play(int durationMs = 0) {
+        if (!stream) return;
+        
+        // Clear any previous audio data
+        SDL_ClearAudioStream(stream);
+        
+        // If duration is provided, use it; otherwise use the default
+        int soundDuration = durationMs > 0 ? durationMs : this->durationMs;
+        if (soundDuration <= 0) soundDuration = 1000; // Default to 1 second
+        
+        // Generate the sine wave data
+        generateSineWave(soundDuration);
+        
+        // Mark as playing and record start time
+        playing = true;
+        startTime = SDL_GetTicks();
+        this->durationMs = soundDuration;
+    }
+    
+    // Update playing state
+    void update() {
+        if (playing && durationMs > 0) {
+            Uint64 currentTime = SDL_GetTicks();
+            if (currentTime - startTime >= durationMs) {
+                playing = false;
+            }
+        }
+    }
+};
 
-// Function to render text about the current frequency
-void RenderText(SDL_Renderer *renderer, double frequency) {
-    // In a real application, you would render text here
-    // Since SDL3 doesn't have built-in text rendering, we'll just draw a
-    // visual representation of the frequency using colored rectangles
+// Sound manager class
+class SoundManager {
+private:
+    SDL_AudioDeviceID deviceId;
+    std::map<std::string, std::unique_ptr<Sound>> sounds;
     
-    int barHeight = static_cast<int>(frequency / 10.0); // Scale for visualization
-    if (barHeight > WINDOW_HEIGHT - 100)
-        barHeight = WINDOW_HEIGHT - 100;
+public:
+    SoundManager(SDL_AudioDeviceID device) : deviceId(device) {}
     
-    SDL_FRect bar = {
-        WINDOW_WIDTH / 2.0f - 50.0f, 
-        WINDOW_HEIGHT - barHeight - 50.0f, 
-        100.0f, 
-        barHeight * 1.0f
+    ~SoundManager() {
+        // The unique_ptrs will clean up the Sound objects
+        sounds.clear();
+    }
+    
+    // Add a new sound
+    bool addSound(const std::string& name, double frequency, float gain = 0.3f, int durationMs = 1000, int fadeMs = 100) {
+        if (sounds.find(name) != sounds.end()) {
+            // Sound already exists
+            return false;
+        }
+        
+        sounds[name] = std::make_unique<Sound>(deviceId, frequency, gain, durationMs, fadeMs);
+        return true;
+    }
+    
+    // Play a sound
+    bool playSound(const std::string& name, int durationMs = 0) {
+        auto it = sounds.find(name);
+        if (it == sounds.end()) {
+            return false;
+        }
+        
+        it->second->play(durationMs);
+        return true;
+    }
+    
+    // Update all sounds
+    void update() {
+        for (auto& pair : sounds) {
+            pair.second->update();
+        }
+    }
+    
+    // Get number of sounds currently playing
+    int getPlayingCount() {
+        int count = 0;
+        for (const auto& pair : sounds) {
+            if (pair.second->playing) {
+                count++;
+            }
+        }
+        return count;
+    }
+    
+    // Give access to the sounds for rendering
+    const std::map<std::string, std::unique_ptr<Sound>>& getSounds() const {
+        return sounds;
+    }
+};
+
+// Function to render visualization of the playing sounds
+void RenderPlayingSounds(SDL_Renderer *renderer, SoundManager& soundManager, const std::map<std::string, std::unique_ptr<Sound>>& sounds) {
+    const int barWidth = WINDOW_WIDTH / (sounds.size() > 0 ? sounds.size() : 1);
+    int i = 0;
+    
+    for (const auto& pair : sounds) {
+        const Sound& sound = *pair.second;
+        
+        int barHeight = 0;
+        SDL_Color color = {0, 0, 0, 255}; // Black for not playing
+        
+        if (sound.playing) {
+            // Calculate height based on frequency
+            barHeight = static_cast<int>(sound.frequency / 5.0); // Scale for visualization
+            if (barHeight > WINDOW_HEIGHT - 100)
+                barHeight = WINDOW_HEIGHT - 100;
+            
+            // Set color based on frequency (low frequencies are blue, high are red)
+            float normalizedFreq = sound.frequency / 1000.0f;
+            if (normalizedFreq > 1.0f) normalizedFreq = 1.0f;
+            
+            color.r = static_cast<Uint8>(normalizedFreq * 255);
+            color.g = static_cast<Uint8>((1.0f - normalizedFreq) * 128);
+            color.b = static_cast<Uint8>((1.0f - normalizedFreq) * 255);
+            color.a = 255;
+        }
+        
+        // Draw the bar
+        SDL_FRect bar = {
+            static_cast<float>(i * barWidth),
+            WINDOW_HEIGHT - barHeight - 50.0f,
+            static_cast<float>(barWidth - 5),
+            static_cast<float>(barHeight)
+        };
+        
+        SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
+        SDL_RenderFillRect(renderer, &bar);
+        
+        i++;
+    }
+    
+    // Display count of playing sounds
+    int playingCount = soundManager.getPlayingCount();
+    const int boxHeight = 30;
+    const int boxWidth = 200;
+    
+    SDL_FRect countBox = {
+        10.0f, 10.0f,
+        static_cast<float>(boxWidth), static_cast<float>(boxHeight)
     };
     
-    // Set color based on frequency (low frequencies are blue, high are red)
-    float normalizedFreq = frequency / 1000.0f; // Normalize to 0-1 range for common frequencies
-    if (normalizedFreq > 1.0f) normalizedFreq = 1.0f;
-    
-    SDL_SetRenderDrawColor(renderer, 
-                          static_cast<Uint8>(normalizedFreq * 255), // Red component
-                          static_cast<Uint8>((1.0f - normalizedFreq) * 128), // Green component
-                          static_cast<Uint8>((1.0f - normalizedFreq) * 255), // Blue component
-                          255); // Alpha
-    
-    SDL_RenderFillRect(renderer, &bar);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 180);
+    SDL_RenderFillRect(renderer, &countBox);
 }
 
 int main(int argc, char* argv[]) {
@@ -108,10 +282,20 @@ int main(int argc, char* argv[]) {
     SDL_AudioSpec audioSpec;
     SDL_zero(audioSpec);
     audioSpec.format = SDL_AUDIO_F32;
-    audioSpec.channels = 1;      // mono
+    audioSpec.channels = 2;      // stereo
     audioSpec.freq = 48000;      // 48KHz
     
-    // Define a sequence of frequencies to play (musical notes)
+    // Open the audio device
+    SDL_AudioDeviceID audioDevice = SDL_OpenAudioDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &audioSpec);
+    if (!audioDevice) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to open audio device: %s", SDL_GetError());
+        SDL_DestroyRenderer(renderer);
+        SDL_DestroyWindow(window);
+        SDL_Quit();
+        return -1;
+    }
+    
+    // Define a sequence of frequencies for musical notes
     std::vector<double> frequencies = {
         261.63, // C4
         293.66, // D4
@@ -123,39 +307,30 @@ int main(int argc, char* argv[]) {
         523.25  // C5
     };
     
-    // Current frequency to use (this will be passed to our callback)
-    double currentFrequency = frequencies[0];
+    // Create the sound manager
+    SoundManager soundManager(audioDevice);
     
-    // Open audio device stream with our callback
-    SDL_AudioStream *audioStream = SDL_OpenAudioDeviceStream(
-        SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, 
-        &audioSpec, 
-        AudioCallback,
-        &currentFrequency
-    );
-    
-    if (!audioStream) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to open audio stream: %s", SDL_GetError());
-        SDL_DestroyRenderer(renderer);
-        SDL_DestroyWindow(window);
-        SDL_Quit();
-        return -1;
+    // Add sounds for each note with 100ms fadeout
+    for (size_t i = 0; i < frequencies.size(); i++) {
+        std::string noteName = "note" + std::to_string(i);
+        soundManager.addSound(noteName, frequencies[i], 0.3f, 2000, 100); // 2 second duration, 100ms fadeout
     }
     
-    // Start playing
-    SDL_ResumeAudioStreamDevice(audioStream);
-    
-    SDL_Log("Playing a sequence of tones with 1-second intervals...");
-    
-    // Play each frequency for 1 second
-    size_t currentNoteIndex = 0;
-    Uint64 lastNoteChangeTime = SDL_GetTicks();
+    // Create a chord sound with 200ms fadeout for smoother chord endings
+    soundManager.addSound("chord1", 261.63, 0.2f, 3000, 200); // C4 for 3 seconds, 200ms fadeout
+    soundManager.addSound("chord2", 329.63, 0.2f, 3000, 200); // E4 for 3 seconds, 200ms fadeout 
+    soundManager.addSound("chord3", 392.00, 0.2f, 3000, 200); // G4 for 3 seconds, 200ms fadeout
     
     // Main loop flag
     bool quit = false;
     
     // Event handler
     SDL_Event e;
+    
+    // Display instructions
+    SDL_Log("Press keys 1-8 to play individual notes");
+    SDL_Log("Press C to play a C major chord");
+    SDL_Log("Press A to quit");
     
     // While application is running
     while (!quit) {
@@ -167,36 +342,45 @@ int main(int argc, char* argv[]) {
             }
             // User presses a key
             else if (e.type == SDL_EVENT_KEY_DOWN) {
-                // If 'A' key is pressed
-                if (e.key.key == SDLK_A) {
-                    SDL_Log("'A' key pressed. Exiting...");
-                    quit = true;
-                }
-                // If space key is pressed, change to the next note
-                else if (e.key.key == SDLK_SPACE) {
-                    currentNoteIndex = (currentNoteIndex + 1) % frequencies.size();
-                    currentFrequency = frequencies[currentNoteIndex];
-                    SDL_Log("Playing frequency: %.2f Hz", currentFrequency);
-                    lastNoteChangeTime = SDL_GetTicks();
+                switch (e.key.key) {
+                    case SDLK_A:
+                        SDL_Log("'A' key pressed. Exiting...");
+                        quit = true;
+                        break;
+                    case SDLK_1:
+                    case SDLK_2:
+                    case SDLK_3:
+                    case SDLK_4:
+                    case SDLK_5:
+                    case SDLK_6:
+                    case SDLK_7:
+                    case SDLK_8: {
+                        int noteIndex = e.key.key - SDLK_1;
+                        std::string noteName = "note" + std::to_string(noteIndex);
+                        soundManager.playSound(noteName);
+                        SDL_Log("Playing note %d (%.2f Hz)", noteIndex + 1, frequencies[noteIndex]);
+                        break;
+                    }
+                    case SDLK_C:
+                        // Play a C major chord (C, E, G together)
+                        soundManager.playSound("chord1");
+                        soundManager.playSound("chord2");
+                        soundManager.playSound("chord3");
+                        SDL_Log("Playing C major chord");
+                        break;
                 }
             }
         }
         
-        // Check if it's time to change notes (every 1 second) in auto mode
-        Uint64 currentTime = SDL_GetTicks();
-        if (currentTime - lastNoteChangeTime >= 1000) {
-            currentNoteIndex = (currentNoteIndex + 1) % frequencies.size();
-            currentFrequency = frequencies[currentNoteIndex];
-            SDL_Log("Playing frequency: %.2f Hz", currentFrequency);
-            lastNoteChangeTime = currentTime;
-        }
+        // Update sound states
+        soundManager.update();
         
         // Clear screen
         SDL_SetRenderDrawColor(renderer, 30, 30, 30, 255);
         SDL_RenderClear(renderer);
         
-        // Render text about current frequency
-        RenderText(renderer, currentFrequency);
+        // Render the visualization using properly accessed sounds
+        RenderPlayingSounds(renderer, soundManager, soundManager.getSounds());
         
         // Update screen
         SDL_RenderPresent(renderer);
@@ -206,7 +390,7 @@ int main(int argc, char* argv[]) {
     }
     
     // Clean up
-    SDL_DestroyAudioStream(audioStream);
+    SDL_CloseAudioDevice(audioDevice);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();
