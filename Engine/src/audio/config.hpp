@@ -14,3 +14,6 @@
 #define GRID_LINES 10
 #define STATUS_BOX_HEIGHT 30
 #define STATUS_BOX_WIDTH 200
+
+// Mixer settings
+#define DELAY_MS 20

@@ -24,9 +24,38 @@ std::string generateFilename() {
     return oss.str();
 }
 
+// Helper function to handle note key events
+void handleNoteKeyEvent(SoundManager &soundManager, const std::vector<double> &frequencies, int key, bool isKeyDown) {
+    int noteIndex = key - SDLK_1;
+    std::string noteName = "note" + std::to_string(noteIndex);
+
+    if (isKeyDown) {
+        soundManager.recordKeyDown(noteName);
+        SDL_Log("Key down: note %d (%.2f Hz)", noteIndex + 1, frequencies[noteIndex]);
+    } else {
+        soundManager.recordKeyUp(noteName);
+        SDL_Log("Key up: note %d", noteIndex + 1);
+    }
+}
+
+// Helper function to handle chord key events
+void handleChordKeyEvent(SoundManager &soundManager, bool isKeyDown) {
+    const std::vector<std::string> chordNotes = {"chord1", "chord2", "chord3"};
+
+    for (const auto &note : chordNotes) {
+        if (isKeyDown) {
+            soundManager.recordKeyDown(note);
+        } else {
+            soundManager.recordKeyUp(note);
+        }
+    }
+
+    SDL_Log(isKeyDown ? "Playing C major chord" : "C major chord released");
+}
+
 int main(int argc, char* argv[]) {
     // Initialize SDL with both video and audio
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
+    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't initialize SDL: %s", SDL_GetError());
         return -1;
     }
@@ -134,12 +163,12 @@ int main(int argc, char* argv[]) {
             // User presses a key
             else if (e.type == SDL_EVENT_KEY_DOWN) {
                 switch (e.key.key) {
-                    case SDLK_A:
-                        SDL_Log("'A' key pressed. Exiting...");
+                    case SDLK_ESCAPE:
+                        SDL_Log("'ESC' key pressed. Exiting...");
                         quit = true;
                         break;
                         
-                    case SDLK_S:
+                    case SDLK_KP_PLUS:
                         // Toggle recording
                         if (soundManager.isCurrentlyRecording()) {
                             soundManager.stopRecording();
@@ -148,7 +177,7 @@ int main(int argc, char* argv[]) {
                         }
                         break;
                         
-                    case SDLK_D:
+                    case SDLK_KP_MINUS:
                         // Start playback of recorded music
                         if (!soundManager.isCurrentlyPlaying()) {
                             soundManager.startPlayback();
@@ -157,7 +186,7 @@ int main(int argc, char* argv[]) {
                         }
                         break;
                         
-                    case SDLK_F:
+                    case SDLK_KP_ENTER:
                         // Save recording to file
                         {
                             std::string filename = generateFilename();
@@ -169,7 +198,7 @@ int main(int argc, char* argv[]) {
                         }
                         break;
                         
-                    case SDLK_L:
+                    case SDLK_KP_0:
                         // Load recording from file and start playback
                         if (soundManager.loadRecordingFromFile(recordingFilePath)) {
                             SDL_Log("Loaded recording from %s", recordingFilePath.c_str());
@@ -179,58 +208,26 @@ int main(int argc, char* argv[]) {
                         }
                         break;
                         
-                    case SDLK_1:
-                    case SDLK_2:
-                    case SDLK_3:
-                    case SDLK_4:
-                    case SDLK_5:
-                    case SDLK_6:
-                    case SDLK_7:
-                    case SDLK_8:
-                    case SDLK_9: {
-                        int noteIndex = e.key.key - SDLK_1;
-                        std::string noteName = "note" + std::to_string(noteIndex);
-                        
-                        // Record key down event and play sound
-                        soundManager.recordKeyDown(noteName);
-                        SDL_Log("Key down: note %d (%.2f Hz)", noteIndex + 1, frequencies[noteIndex]);
+                    case SDLK_1: case SDLK_2: case SDLK_3: case SDLK_4:
+                    case SDLK_5: case SDLK_6: case SDLK_7: case SDLK_8: case SDLK_9:
+                        handleNoteKeyEvent(soundManager, frequencies, e.key.key, true);
                         break;
-                    }
-                    case SDLK_C:
-                        // Play a C major chord (C, E, G together)
-                        soundManager.recordKeyDown("chord1");
-                        soundManager.recordKeyDown("chord2");
-                        soundManager.recordKeyDown("chord3");
-                        SDL_Log("Playing C major chord");
+
+                    case SDLK_KP_1:
+                        handleChordKeyEvent(soundManager, true);
                         break;
                 }
             }
             // User releases a key
             else if (e.type == SDL_EVENT_KEY_UP) {
                 switch (e.key.key) {
-                    case SDLK_1:
-                    case SDLK_2:
-                    case SDLK_3:
-                    case SDLK_4:
-                    case SDLK_5:
-                    case SDLK_6:
-                    case SDLK_7:
-                    case SDLK_8:
-                    case SDLK_9: {
-                        int noteIndex = e.key.key - SDLK_1;
-                        std::string noteName = "note" + std::to_string(noteIndex);
-                        
-                        // Record key up event (no sound)
-                        soundManager.recordKeyUp(noteName);
-                        SDL_Log("Key up: note %d", noteIndex + 1);
+                    case SDLK_1: case SDLK_2: case SDLK_3: case SDLK_4:
+                    case SDLK_5: case SDLK_6: case SDLK_7: case SDLK_8: case SDLK_9:
+                        handleNoteKeyEvent(soundManager, frequencies, e.key.key, false);
                         break;
-                    }
-                    case SDLK_C:
-                        // Record chord key releases
-                        soundManager.recordKeyUp("chord1");
-                        soundManager.recordKeyUp("chord2");
-                        soundManager.recordKeyUp("chord3");
-                        SDL_Log("C major chord released");
+
+                    case SDLK_KP_1:
+                        handleChordKeyEvent(soundManager, false);
                         break;
                 }
             }
@@ -250,7 +247,7 @@ int main(int argc, char* argv[]) {
         SDL_RenderPresent(renderer);
         
         // Small delay to reduce CPU usage
-        SDL_Delay(1);
+        SDL_Delay(DELAY_MS);
     }
     
     // Clean up

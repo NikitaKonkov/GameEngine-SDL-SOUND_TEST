@@ -1,4 +1,5 @@
 #include "soundManager.hpp"
+#include "config.hpp"
 #include <SDL3/SDL.h>
 
 SoundManager::SoundManager(SDL_AudioDeviceID device)
@@ -218,23 +219,43 @@ void SoundManager::updatePlayback() {
 }
 
 void SoundManager::updateContinuousPlayback() {
+    // Get current time once for all operations
     Uint64 currentTime = SDL_GetTicks();
     
-    // For each key that's held down, check if we need to play it again
-    for (const auto& keyState : keyStates) {
-        if (keyState.second) { // If key is down
-            const std::string& name = keyState.first;
+    // Define a consistent replay rate for all notes (in milliseconds)
+    const int CONSISTENT_REPLAY_INTERVAL = DELAY_MS; // Slightly less than note duration for smooth continuous sound
+    
+    // Process all held keys with a consistent approach
+    for (auto& keyPair : keyStates) {
+        const std::string& name = keyPair.first;
+        bool isKeyDown = keyPair.second;
+        
+        // Skip keys that aren't being held down
+        if (!isKeyDown) {
+            continue;
+        }
+        
+        // Check if we need to initialize timing for this key
+        if (keyPressTime.find(name) == keyPressTime.end()) {
+            // First encounter with this key - initialize timing data
+            keyPressTime[name] = currentTime;
+            continue; // Skip playing on first press - it's handled by recordKeyDown
+        }
+        
+        // Check if enough time has passed to replay this sound
+        Uint64 lastPlayTime = keyPressTime[name];
+        Uint64 elapsedTime = currentTime - lastPlayTime;
+        
+        // Replay at fixed intervals for consistency across all notes
+        if (elapsedTime >= CONSISTENT_REPLAY_INTERVAL) {
+            // Play the sound again
+            playSound(name);
             
-            // Check if the sound has finished playing (based on its duration)
-            Uint64 lastPlayTime = keyPressTime[name];
-            int duration = keyPlayDuration[name];
+            // Update the last play time for just this key
+            keyPressTime[name] = currentTime;
             
-            // If the sound has finished or is about to finish, play it again
-            // We restart the sound slightly before it ends to ensure continuous playback
-            if (currentTime - lastPlayTime >= (duration - 50)) {  // 50ms overlap
-                playSound(name);
-                keyPressTime[name] = currentTime;
-            }
+            SDL_Log("Replaying held key: %s (interval: %llu ms)", 
+                    name.c_str(), elapsedTime);
         }
     }
 }
