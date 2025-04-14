@@ -3,7 +3,7 @@
 
 SoundManager::SoundManager(SDL_AudioDeviceID device)
     : deviceId(device), isRecording(false), recordingStartTime(0), 
-      isPlaying(false), playbackStartTime(0), currentEventIndex(0) {}
+      isPlaying(false), playbackStartTime(0), currentEventIndex(0), globalVolume(1.0f) {}
 
 SoundManager::~SoundManager() {
     // The unique_ptrs will clean up the Sound objects
@@ -31,9 +31,10 @@ bool SoundManager::playSound(const std::string& name, int durationMs) {
     std::string instanceName = name + "_instance" + std::to_string(instanceCounter++);
     Sound* templateSound = it->second.get();
     
-    // Create a new sound instance with the same parameters
+    // Create a new sound instance with the same parameters but apply volume
     auto newInstance = std::make_unique<Sound>(deviceId, templateSound->frequency, 
-                                           templateSound->gain, templateSound->durationMs, 
+                                           templateSound->gain * globalVolume, // Apply volume multiplier 
+                                           templateSound->durationMs, 
                                            templateSound->fadeMs);
     
     // Play the new instance
@@ -73,8 +74,9 @@ bool SoundManager::recordKeyDown(const std::string& name) {
         event.soundName = name;
         event.timestamp = SDL_GetTicks() - recordingStartTime;
         event.isKeyDown = true;
+        event.volume = globalVolume; // Store current volume level
         recordedEvents.push_back(event);
-        SDL_Log("Recorded key down: %s at %llu ms", name.c_str(), event.timestamp);
+        SDL_Log("Recorded key down: %s at %llu ms (volume: %.2f)", name.c_str(), event.timestamp, globalVolume);
     }
     
     return true;
@@ -95,8 +97,9 @@ bool SoundManager::recordKeyUp(const std::string& name) {
         event.soundName = name;
         event.timestamp = SDL_GetTicks() - recordingStartTime;
         event.isKeyDown = false;
+        event.volume = globalVolume; // Store current volume level
         recordedEvents.push_back(event);
-        SDL_Log("Recorded key up: %s at %llu ms", name.c_str(), event.timestamp);
+        SDL_Log("Recorded key up: %s at %llu ms (volume: %.2f)", name.c_str(), event.timestamp, globalVolume);
     }
     
     return true;
@@ -182,10 +185,17 @@ void SoundManager::updatePlayback() {
                     keyPressTime[event.soundName] = SDL_GetTicks();
                     keyPlayDuration[event.soundName] = it->second->getDuration();
                     
+                    // Temporarily adjust volume to match recorded level
+                    float originalVolume = globalVolume;
+                    globalVolume = event.volume;
+                    
                     // Play the sound
                     playSound(event.soundName);
+                    
+                    // Restore original volume
+                    globalVolume = originalVolume;
                 }
-                SDL_Log("Playback: key down %s at %llu ms", event.soundName.c_str(), currentTime);
+                SDL_Log("Playback: key down %s at %llu ms (volume: %.2f)", event.soundName.c_str(), currentTime, event.volume);
             } else {
                 // Key up event - just update state
                 keyStates[event.soundName] = false;
@@ -272,13 +282,14 @@ bool SoundManager::saveRecordingToFile(const std::string& filename) {
     }
     
     // Write a header
-    file << "# Sound Recording - Timestamp(ms),SoundName,Action(Down/Up)" << std::endl;
+    file << "# Sound Recording - Timestamp(ms),SoundName,Action(Down/Up),Volume" << std::endl;
     
     // Write each event
     for (const auto& event : recordedEvents) {
         file << event.timestamp << "," 
              << event.soundName << ","
-             << (event.isKeyDown ? "Down" : "Up") << std::endl;
+             << (event.isKeyDown ? "Down" : "Up") << ","
+             << event.volume << std::endl;
     }
     
     file.close();
@@ -309,13 +320,27 @@ bool SoundManager::loadRecordingFromFile(const std::string& filename) {
         // Parse CSV format
         size_t pos1 = line.find(',');
         size_t pos2 = line.find(',', pos1 + 1);
+        size_t pos3 = line.find(',', pos2 + 1);
         
         if (pos1 != std::string::npos && pos2 != std::string::npos) {
             SoundEvent event;
             event.timestamp = std::stoull(line.substr(0, pos1));
             event.soundName = line.substr(pos1 + 1, pos2 - pos1 - 1);
-            std::string action = line.substr(pos2 + 1);
+            std::string action = line.substr(pos2 + 1, pos3 - pos2 - 1);
             event.isKeyDown = (action == "Down");
+            
+            // Check if we have volume data (newer file format)
+            if (pos3 != std::string::npos) {
+                try {
+                    event.volume = std::stof(line.substr(pos3 + 1));
+                }
+                catch(...) {
+                    event.volume = 1.0f; // Default volume if parsing fails
+                }
+            }
+            else {
+                event.volume = 1.0f; // Default for older files without volume
+            }
             
             // Add event to the collection
             recordedEvents.push_back(event);
@@ -325,4 +350,15 @@ bool SoundManager::loadRecordingFromFile(const std::string& filename) {
     file.close();
     SDL_Log("Successfully loaded %zu events from file: %s", recordedEvents.size(), filename.c_str());
     return true;
+}
+
+// Volume control implementation
+void SoundManager::adjustVolume(float delta) {
+    globalVolume += delta;
+    
+    // Clamp volume between 0.0 and 2.0 (0% to 200%)
+    if (globalVolume < 0.0f) globalVolume = 0.0f;
+    if (globalVolume > 2.0f) globalVolume = 2.0f;
+    
+    SDL_Log("Volume adjusted to %.1f%%", globalVolume * 100.0f);
 }

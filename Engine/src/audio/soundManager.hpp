@@ -12,6 +12,7 @@ struct SoundEvent {
     std::string soundName;
     Uint64 timestamp;
     bool isKeyDown; // true for key down, false for key up
+    float volume;   // Store volume level with each event
 };
 
 // Sound manager class
@@ -34,6 +35,9 @@ private:
     bool isPlaying;
     Uint64 playbackStartTime;
     size_t currentEventIndex;
+    
+    // Volume control
+    float globalVolume = 1.0f;  // Default volume level (100%)
     
     // Update playback (check for events to play)
     void updatePlayback();
@@ -73,6 +77,10 @@ public:
     // Status getters
     bool isCurrentlyRecording() const { return isRecording; }
     bool isCurrentlyPlaying() const { return isPlaying; }
+    
+    // Volume control
+    void adjustVolume(float delta);
+    float getVolume() const { return globalVolume; }
     
     // Access to sound collections for rendering
     const std::vector<std::unique_ptr<Sound>>& getActiveInstances() const { return activeInstances; }

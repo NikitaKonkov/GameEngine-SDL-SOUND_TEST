@@ -104,6 +104,9 @@ int main(int argc, char* argv[]) {
     // File path for loading recordings
     const std::string recordingFilePath = "c:\\Users\\nikit\\Desktop\\C++ Development\\GameEngine-SDL-SOUND_TEST\\recordings\\1.txt";
     
+    // Volume control settings
+    const float VOLUME_STEP = 0.05f; // 5% volume adjustment per wheel tick
+    
     // Display instructions
     SDL_Log("Press keys 1-8 to play individual notes");
     SDL_Log("Press C to play a C major chord");
@@ -112,6 +115,7 @@ int main(int argc, char* argv[]) {
     SDL_Log("Press F to save your recorded music to a file");
     SDL_Log("Press L to load and play music from 1.txt");
     SDL_Log("Press A to quit");
+    SDL_Log("Scroll mouse wheel up/down to adjust volume");
     SDL_Log("You can play multiple notes simultaneously - each press creates a new sound instance");
     
     // While application is running
@@ -121,6 +125,11 @@ int main(int argc, char* argv[]) {
             // User requests quit
             if (e.type == SDL_EVENT_QUIT) {
                 quit = true;
+            }
+            // User scrolls mouse wheel for volume control
+            else if (e.type == SDL_EVENT_MOUSE_WHEEL) {
+                float volumeDelta = e.wheel.y * VOLUME_STEP;
+                soundManager.adjustVolume(volumeDelta);
             }
             // User presses a key
             else if (e.type == SDL_EVENT_KEY_DOWN) {
@@ -177,7 +186,8 @@ int main(int argc, char* argv[]) {
                     case SDLK_5:
                     case SDLK_6:
                     case SDLK_7:
-                    case SDLK_8: {
+                    case SDLK_8:
+                    case SDLK_9: {
                         int noteIndex = e.key.key - SDLK_1;
                         std::string noteName = "note" + std::to_string(noteIndex);
                         
@@ -205,7 +215,8 @@ int main(int argc, char* argv[]) {
                     case SDLK_5:
                     case SDLK_6:
                     case SDLK_7:
-                    case SDLK_8: {
+                    case SDLK_8:
+                    case SDLK_9: {
                         int noteIndex = e.key.key - SDLK_1;
                         std::string noteName = "note" + std::to_string(noteIndex);
                         
@@ -239,7 +250,7 @@ int main(int argc, char* argv[]) {
         SDL_RenderPresent(renderer);
         
         // Small delay to reduce CPU usage
-        SDL_Delay(10);
+        SDL_Delay(1);
     }
     
     // Clean up
