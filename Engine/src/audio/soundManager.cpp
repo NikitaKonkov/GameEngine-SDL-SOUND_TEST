@@ -263,3 +263,66 @@ int SoundManager::getPlayingCount() {
     }
     return count;
 }
+
+bool SoundManager::saveRecordingToFile(const std::string& filename) {
+    std::ofstream file(filename);
+    if (!file.is_open()) {
+        SDL_Log("Failed to open file for saving: %s", filename.c_str());
+        return false;
+    }
+    
+    // Write a header
+    file << "# Sound Recording - Timestamp(ms),SoundName,Action(Down/Up)" << std::endl;
+    
+    // Write each event
+    for (const auto& event : recordedEvents) {
+        file << event.timestamp << "," 
+             << event.soundName << ","
+             << (event.isKeyDown ? "Down" : "Up") << std::endl;
+    }
+    
+    file.close();
+    SDL_Log("Successfully saved recording to: %s", filename.c_str());
+    return true;
+}
+
+bool SoundManager::loadRecordingFromFile(const std::string& filename) {
+    std::ifstream file(filename);
+    if (!file.is_open()) {
+        SDL_Log("Failed to open file for loading: %s", filename.c_str());
+        return false;
+    }
+
+    // Clear any existing recording
+    recordedEvents.clear();
+    
+    std::string line;
+    
+    // Skip header line
+    std::getline(file, line);
+    
+    // Read event data
+    while (std::getline(file, line)) {
+        // Skip empty lines
+        if (line.empty()) continue;
+        
+        // Parse CSV format
+        size_t pos1 = line.find(',');
+        size_t pos2 = line.find(',', pos1 + 1);
+        
+        if (pos1 != std::string::npos && pos2 != std::string::npos) {
+            SoundEvent event;
+            event.timestamp = std::stoull(line.substr(0, pos1));
+            event.soundName = line.substr(pos1 + 1, pos2 - pos1 - 1);
+            std::string action = line.substr(pos2 + 1);
+            event.isKeyDown = (action == "Down");
+            
+            // Add event to the collection
+            recordedEvents.push_back(event);
+        }
+    }
+    
+    file.close();
+    SDL_Log("Successfully loaded %zu events from file: %s", recordedEvents.size(), filename.c_str());
+    return true;
+}

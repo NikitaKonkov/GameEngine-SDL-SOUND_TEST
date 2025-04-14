@@ -2,12 +2,27 @@
 #include <SDL3/SDL.h>
 #include <vector>
 #include <memory>
+#include <ctime>
+#include <sstream>
+#include <iomanip>
 
 // Our modular audio system includes
 #include "audio/sound.hpp"
 #include "audio/soundManager.hpp"
 #include "audio/visualizer.hpp"
 #include "audio/config.hpp"
+
+// Generate a unique filename based on timestamp
+std::string generateFilename() {
+    auto now = std::time(nullptr);
+    auto tm = *std::localtime(&now);
+    std::ostringstream oss;
+    oss << "c:\\Users\\nikit\\Desktop\\C++ Development\\GameEngine-SDL-SOUND_TEST\\recordings\\";
+    oss << "music_recording_";
+    oss << std::put_time(&tm, "%Y%m%d_%H%M%S");
+    oss << ".txt";
+    return oss.str();
+}
 
 int main(int argc, char* argv[]) {
     // Initialize SDL with both video and audio
@@ -86,11 +101,16 @@ int main(int argc, char* argv[]) {
     // Event handler
     SDL_Event e;
     
+    // File path for loading recordings
+    const std::string recordingFilePath = "c:\\Users\\nikit\\Desktop\\C++ Development\\GameEngine-SDL-SOUND_TEST\\recordings\\1.txt";
+    
     // Display instructions
     SDL_Log("Press keys 1-8 to play individual notes");
     SDL_Log("Press C to play a C major chord");
     SDL_Log("Press S to start/stop recording");
     SDL_Log("Press D to play back recorded music");
+    SDL_Log("Press F to save your recorded music to a file");
+    SDL_Log("Press L to load and play music from 1.txt");
     SDL_Log("Press A to quit");
     SDL_Log("You can play multiple notes simultaneously - each press creates a new sound instance");
     
@@ -125,6 +145,28 @@ int main(int argc, char* argv[]) {
                             soundManager.startPlayback();
                         } else {
                             soundManager.stopPlayback();
+                        }
+                        break;
+                        
+                    case SDLK_F:
+                        // Save recording to file
+                        {
+                            std::string filename = generateFilename();
+                            if (soundManager.saveRecordingToFile(filename)) {
+                                SDL_Log("Recording saved to %s", filename.c_str());
+                            } else {
+                                SDL_Log("Failed to save recording");
+                            }
+                        }
+                        break;
+                        
+                    case SDLK_L:
+                        // Load recording from file and start playback
+                        if (soundManager.loadRecordingFromFile(recordingFilePath)) {
+                            SDL_Log("Loaded recording from %s", recordingFilePath.c_str());
+                            soundManager.startPlayback();
+                        } else {
+                            SDL_Log("Failed to load recording from %s", recordingFilePath.c_str());
                         }
                         break;
                         

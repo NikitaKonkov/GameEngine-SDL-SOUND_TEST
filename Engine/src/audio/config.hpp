@@ -10,7 +10,7 @@
 #define AUDIO_CHANNELS 2
 
 // Visualization settings
-#define MAX_VISIBLE_BARS 1
+#define MAX_VISIBLE_BARS 100
 #define GRID_LINES 10
 #define STATUS_BOX_HEIGHT 30
 #define STATUS_BOX_WIDTH 200

@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <fstream>
 
 // Structure to record sound events
 struct SoundEvent {
@@ -76,4 +77,10 @@ public:
     // Access to sound collections for rendering
     const std::vector<std::unique_ptr<Sound>>& getActiveInstances() const { return activeInstances; }
     const std::map<std::string, std::unique_ptr<Sound>>& getSounds() const { return sounds; }
+    
+    // Save recorded events to a file
+    bool saveRecordingToFile(const std::string& filename);
+    
+    // Load recorded events from a file
+    bool loadRecordingFromFile(const std::string& filename);
 };

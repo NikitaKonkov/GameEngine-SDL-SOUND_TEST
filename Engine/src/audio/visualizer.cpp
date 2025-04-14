@@ -5,12 +5,7 @@ void SoundVisualizer::RenderPlayingSounds(SDL_Renderer *renderer, SoundManager& 
     const auto& activeInstances = soundManager.getActiveInstances();
     int playingCount = soundManager.getPlayingCount();
     
-    // Draw background grid lines
-    SDL_SetRenderDrawColor(renderer, 50, 50, 50, 255);
-    for (int i = 0; i < GRID_LINES; i++) {
-        int y = 50 + i * (WINDOW_HEIGHT - 100) / GRID_LINES;
-        SDL_RenderLine(renderer, 0, y, WINDOW_WIDTH, y);
-    }
+
     
     // If no active instances, just show a placeholder
     if (playingCount == 0) {
