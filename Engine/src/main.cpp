@@ -91,9 +91,9 @@ int main(int argc, char* argv[]) {
     }
     
     // Create a chord sound with 200ms fadeout for smoother chord endings
-    soundManager.addSound("chord1", 261.63, 0.2f, 3000, 200); // C4 for 3 seconds, 200ms fadeout
-    soundManager.addSound("chord2", 329.63, 0.2f, 3000, 200); // E4 for 3 seconds, 200ms fadeout 
-    soundManager.addSound("chord3", 392.00, 0.2f, 3000, 200); // G4 for 3 seconds, 200ms fadeout
+    soundManager.addSound("chord1", 261.63, 0.2f, 5000, 200); // C4 for 3 seconds, 200ms fadeout
+    soundManager.addSound("chord2", 329.63, 0.2f, 5000, 200); // E4 for 3 seconds, 200ms fadeout 
+    soundManager.addSound("chord3", 392.00, 0.2f, 5000, 200); // G4 for 3 seconds, 200ms fadeout
     
     // Main loop flag
     bool quit = false;

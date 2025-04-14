@@ -282,13 +282,21 @@ bool SoundManager::saveRecordingToFile(const std::string& filename) {
     }
     
     // Write a header
-    file << "# Sound Recording - Timestamp(ms),SoundName,Action(Down/Up),Volume" << std::endl;
+    file << "# Sound Recording - Timestamp(ms),SoundName,Action(D/U),Volume" << std::endl;
     
-    // Write each event
+    // Write each event with shortened representations
     for (const auto& event : recordedEvents) {
+        // Shorten note and chord names (note1 -> n1, chord1 -> c1)
+        std::string shortName = event.soundName;
+        if (shortName.find("note") == 0) {
+            shortName = "n" + shortName.substr(4);  // Replace "note" with "n"
+        } else if (shortName.find("chord") == 0) {
+            shortName = "c" + shortName.substr(5);  // Replace "chord" with "c"
+        }
+        
         file << event.timestamp << "," 
-             << event.soundName << ","
-             << (event.isKeyDown ? "Down" : "Up") << ","
+             << shortName << ","
+             << (event.isKeyDown ? "D" : "U") << ","
              << event.volume << std::endl;
     }
     
@@ -325,11 +333,22 @@ bool SoundManager::loadRecordingFromFile(const std::string& filename) {
         if (pos1 != std::string::npos && pos2 != std::string::npos) {
             SoundEvent event;
             event.timestamp = std::stoull(line.substr(0, pos1));
-            event.soundName = line.substr(pos1 + 1, pos2 - pos1 - 1);
-            std::string action = line.substr(pos2 + 1, pos3 - pos2 - 1);
-            event.isKeyDown = (action == "Down");
             
-            // Check if we have volume data (newer file format)
+            // Extract and expand shortened sound name
+            std::string shortName = line.substr(pos1 + 1, pos2 - pos1 - 1);
+            if (shortName[0] == 'n' && shortName.length() > 1) {
+                event.soundName = "note" + shortName.substr(1);  // Expand "n1" to "note1"
+            } else if (shortName[0] == 'c' && shortName.length() > 1) {
+                event.soundName = "chord" + shortName.substr(1);  // Expand "c1" to "chord1"
+            } else {
+                event.soundName = shortName;  // Keep as is if not matching pattern
+            }
+            
+            // Parse action character
+            std::string action = line.substr(pos2 + 1, 1);
+            event.isKeyDown = (action == "D");
+            
+            // Check if we have volume data
             if (pos3 != std::string::npos) {
                 try {
                     event.volume = std::stof(line.substr(pos3 + 1));
@@ -339,7 +358,7 @@ bool SoundManager::loadRecordingFromFile(const std::string& filename) {
                 }
             }
             else {
-                event.volume = 1.0f; // Default for older files without volume
+                event.volume = 1.0f; // Default for files without volume
             }
             
             // Add event to the collection
