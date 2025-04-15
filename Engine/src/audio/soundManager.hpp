@@ -1,11 +1,15 @@
 #pragma once
 
 #include "sound.hpp"
+#include <SDL3/SDL.h> // Include SDL header for SDL_AudioDeviceID
 #include <map>
 #include <string>
 #include <vector>
 #include <memory>
 #include <fstream>
+
+// External reference to currentDelay (defined in main.cpp)
+extern int currentDelay;
 
 // Structure to record sound events
 struct SoundEvent {
@@ -13,6 +17,7 @@ struct SoundEvent {
     Uint64 timestamp;
     bool isKeyDown; // true for key down, false for key up
     float volume;   // Store volume level with each event
+    int delay;      // Store the current delay setting
 };
 
 // Sound manager class
@@ -81,6 +86,9 @@ public:
     // Volume control
     void adjustVolume(float delta);
     float getVolume() const { return globalVolume; }
+    
+    // Delay control
+    void setDelay(int delay); // Add a method to directly set the delay
     
     // Access to sound collections for rendering
     const std::vector<std::unique_ptr<Sound>>& getActiveInstances() const { return activeInstances; }

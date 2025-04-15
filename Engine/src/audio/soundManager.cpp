@@ -88,8 +88,10 @@ bool SoundManager::recordKeyDown(const std::string& name) {
         event.timestamp = SDL_GetTicks() - recordingStartTime;
         event.isKeyDown = true;
         event.volume = globalVolume; // Store current volume level
+        event.delay = currentDelay;  // Store the actual current delay value
         recordedEvents.push_back(event);
-        SDL_Log("Recorded key down: %s at %llu ms (volume: %.2f)", name.c_str(), event.timestamp, globalVolume);
+        SDL_Log("Recorded key down: %s at %llu ms (volume: %.2f, delay: %d ms)", 
+                name.c_str(), event.timestamp, globalVolume, currentDelay);
     }
     
     return true;
@@ -111,8 +113,10 @@ bool SoundManager::recordKeyUp(const std::string& name) {
         event.timestamp = SDL_GetTicks() - recordingStartTime;
         event.isKeyDown = false;
         event.volume = globalVolume; // Store current volume level
+        event.delay = currentDelay;  // Store the actual current delay value
         recordedEvents.push_back(event);
-        SDL_Log("Recorded key up: %s at %llu ms (volume: %.2f)", name.c_str(), event.timestamp, globalVolume);
+        SDL_Log("Recorded key up: %s at %llu ms (volume: %.2f, delay: %d ms)", 
+                name.c_str(), event.timestamp, globalVolume, currentDelay);
     }
     
     return true;
@@ -189,6 +193,13 @@ void SoundManager::updatePlayback() {
                recordedEvents[currentEventIndex].timestamp <= currentTime) {
             const SoundEvent& event = recordedEvents[currentEventIndex];
             
+            // Apply the delay setting from this event to match recording conditions
+            if (event.delay != currentDelay) {
+                // Temporarily update global delay to match what was recorded
+                currentDelay = event.delay;
+                SDL_Log("Playback: using delay of %d ms from recording", currentDelay);
+            }
+            
             if (event.isKeyDown) {
                 // Key down event - play the sound and update state
                 auto it = sounds.find(event.soundName);
@@ -234,8 +245,8 @@ void SoundManager::updateContinuousPlayback() {
     // Get current time once for all operations
     Uint64 currentTime = SDL_GetTicks();
     
-    // Define a consistent replay rate for all notes (in milliseconds)
-    const int CONSISTENT_REPLAY_INTERVAL = DEFAULT_DELAY_MS; // Slightly less than note duration for smooth continuous sound
+    // Use the currentDelay variable instead of DEFAULT_DELAY_MS for the replay interval
+    // This allows the user-adjusted delay to affect continuous playback
     
     // Process all held keys with a consistent approach
     for (auto& keyPair : keyStates) {
@@ -258,16 +269,16 @@ void SoundManager::updateContinuousPlayback() {
         Uint64 lastPlayTime = keyPressTime[name];
         Uint64 elapsedTime = currentTime - lastPlayTime;
         
-        // Replay at fixed intervals for consistency across all notes
-        if (elapsedTime >= CONSISTENT_REPLAY_INTERVAL) {
+        // Replay at fixed intervals using the current delay value
+        if (elapsedTime >= currentDelay) {
             // Play the sound again
             playSound(name);
             
             // Update the last play time for just this key
             keyPressTime[name] = currentTime;
             
-            SDL_Log("Replaying held key: %s (interval: %llu ms)", 
-                    name.c_str(), elapsedTime);
+            SDL_Log("Replaying held key: %s (interval: %llu ms, current delay: %d ms)", 
+                    name.c_str(), elapsedTime, currentDelay);
         }
     }
 }
@@ -315,7 +326,7 @@ bool SoundManager::saveRecordingToFile(const std::string& filename) {
     }
     
     // Write a header
-    file << "# Sound Recording - Timestamp(ms),SoundName,Action(D/U),Volume" << std::endl;
+    file << "# Sound Recording - Timestamp(ms),SoundName,Action(D/U),Volume,Delay" << std::endl;
     
     // Write each event with shortened representations
     for (const auto& event : recordedEvents) {
@@ -330,7 +341,8 @@ bool SoundManager::saveRecordingToFile(const std::string& filename) {
         file << event.timestamp << "," 
              << shortName << ","
              << (event.isKeyDown ? "D" : "U") << ","
-             << event.volume << std::endl;
+             << event.volume << ","
+             << event.delay << std::endl;
     }
     
     file.close();
@@ -362,6 +374,7 @@ bool SoundManager::loadRecordingFromFile(const std::string& filename) {
         size_t pos1 = line.find(',');
         size_t pos2 = line.find(',', pos1 + 1);
         size_t pos3 = line.find(',', pos2 + 1);
+        size_t pos4 = line.find(',', pos3 + 1);
         
         if (pos1 != std::string::npos && pos2 != std::string::npos) {
             SoundEvent event;
@@ -378,20 +391,27 @@ bool SoundManager::loadRecordingFromFile(const std::string& filename) {
             }
             
             // Parse action character
-            std::string action = line.substr(pos2 + 1, 1);
+            std::string action = line.substr(pos2 + 1, pos3 - pos2 - 1);
             event.isKeyDown = (action == "D");
             
-            // Check if we have volume data
-            if (pos3 != std::string::npos) {
-                try {
-                    event.volume = std::stof(line.substr(pos3 + 1));
-                }
-                catch(...) {
-                    event.volume = 1.0f; // Default volume if parsing fails
+            // Parse volume data
+            try {
+                event.volume = std::stof(line.substr(pos3 + 1, pos4 - pos3 - 1));
+            }
+            catch(...) {
+                event.volume = 1.0f; // Default volume if parsing fails
+            }
+            
+            // Parse delay data if available
+            try {
+                if (pos4 != std::string::npos) {
+                    event.delay = std::stoi(line.substr(pos4 + 1));
+                } else {
+                    event.delay = DEFAULT_DELAY_MS; // Use default if not specified
                 }
             }
-            else {
-                event.volume = 1.0f; // Default for files without volume
+            catch(...) {
+                event.delay = DEFAULT_DELAY_MS; // Default delay if parsing fails
             }
             
             // Add event to the collection
@@ -413,4 +433,16 @@ void SoundManager::adjustVolume(float delta) {
     if (globalVolume > 2.0f) globalVolume = 2.0f;
     
     SDL_Log("Volume adjusted to %.1f%%", globalVolume * 100.0f);
+}
+
+// Add a method to directly set the current delay value
+void SoundManager::setDelay(int delay) {
+    // Ensure the delay is within valid range
+    if (delay < MIN_DELAY_MS) delay = MIN_DELAY_MS;
+    if (delay > MAX_DELAY_MS) delay = MAX_DELAY_MS;
+    
+    // Update the global delay variable
+    currentDelay = delay;
+    
+    SDL_Log("SoundManager: Delay set to %d ms", currentDelay);
 }

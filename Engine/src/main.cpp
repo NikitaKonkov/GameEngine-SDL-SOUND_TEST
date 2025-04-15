@@ -12,6 +12,9 @@
 #include "audio/visualizer.hpp"
 #include "audio/config.hpp"
 
+// Global delay variable that can be accessed by both main and SoundManager
+int currentDelay = DEFAULT_DELAY_MS;
+
 // Generate a unique filename based on timestamp
 std::string generateFilename() {
     auto now = std::time(nullptr);
@@ -274,8 +277,6 @@ int main(int argc, char* argv[]) {
     SDL_Log("Press B to increase delay by 10ms");
     
     // While application is running
-    int currentDelay = DEFAULT_DELAY_MS; // Variable to store the current delay
-    
     // While application is running
     while (!quit) {
         // Handle events on queue
@@ -384,7 +385,7 @@ int main(int argc, char* argv[]) {
                         // Decrease delay by 10ms
                         if (currentDelay > MIN_DELAY_MS) {
                             currentDelay -= DELAY_STEP_MS;
-                            SDL_Log("Delay decreased to %d ms", currentDelay);
+                            soundManager.setDelay(currentDelay); // Use the setDelay method
                         }
                         break;
                         
@@ -392,7 +393,7 @@ int main(int argc, char* argv[]) {
                         // Increase delay by 10ms
                         if (currentDelay < MAX_DELAY_MS) {
                             currentDelay += DELAY_STEP_MS;
-                            SDL_Log("Delay increased to %d ms", currentDelay);
+                            soundManager.setDelay(currentDelay); // Use the setDelay method
                         }
                         break;
                 }
