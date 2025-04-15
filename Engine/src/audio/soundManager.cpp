@@ -235,7 +235,7 @@ void SoundManager::updateContinuousPlayback() {
     Uint64 currentTime = SDL_GetTicks();
     
     // Define a consistent replay rate for all notes (in milliseconds)
-    const int CONSISTENT_REPLAY_INTERVAL = DELAY_MS; // Slightly less than note duration for smooth continuous sound
+    const int CONSISTENT_REPLAY_INTERVAL = DEFAULT_DELAY_MS; // Slightly less than note duration for smooth continuous sound
     
     // Process all held keys with a consistent approach
     for (auto& keyPair : keyStates) {

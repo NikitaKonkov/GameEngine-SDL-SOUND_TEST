@@ -16,4 +16,7 @@
 #define STATUS_BOX_WIDTH 200
 
 // Mixer settings
-#define DELAY_MS 100  // Using 16ms (approx 60fps) for better drum responsiveness
+#define DEFAULT_DELAY_MS 100  // Default delay value
+#define MIN_DELAY_MS 10       // Minimum allowed delay
+#define MAX_DELAY_MS 500      // Maximum allowed delay
+#define DELAY_STEP_MS 10      // Step size for delay adjustment

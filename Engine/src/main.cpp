@@ -98,14 +98,14 @@ void handleDrumKeyEvent(SoundManager &soundManager, int key, bool isKeyDown) {
     
     // Map numeric keypad keys to different drum sounds
     switch (key) {
-        case SDLK_KP_2: drumName = "kick"; break;       // Bass drum
-        case SDLK_KP_3: drumName = "snare"; break;      // Snare drum
-        case SDLK_KP_4: drumName = "hihat"; break;      // Hi-hat
-        case SDLK_KP_5: drumName = "tom1"; break;       // High tom
-        case SDLK_KP_6: drumName = "tom2"; break;       // Mid tom
-        case SDLK_KP_7: drumName = "crash"; break;      // Crash cymbal
-        case SDLK_KP_8: drumName = "ride"; break;       // Ride cymbal
-        case SDLK_KP_9: drumName = "clap"; break;       // Hand clap
+        case SDLK_KP_2: drumName = "kick0"; break;       // Bass drum
+        case SDLK_KP_3: drumName = "kick1"; break;      // Snare drum
+        case SDLK_KP_4: drumName = "kick2"; break;      // Hi-hat
+        case SDLK_KP_5: drumName = "kick3"; break;       // High tom
+        case SDLK_KP_6: drumName = "kick4"; break;       // Mid tom
+        case SDLK_KP_7: drumName = "kick5"; break;      // Crash cymbal
+        case SDLK_KP_8: drumName = "kick6"; break;       // Ride cymbal
+        case SDLK_KP_9: drumName = "kick7"; break;       // Hand clap
         default: return; // Unknown key, don't process
     }
     
@@ -236,15 +236,15 @@ int main(int argc, char* argv[]) {
     
     // Add drum sounds with appropriate characteristics
     // Each drum has unique frequency, gain, duration and fadeout parameters to create different percussive sounds
-    soundManager.addSound("kick", 60.00, 0.8f, 120, 80);     // Bass drum - deeper sound, strong attack, short decay
-    soundManager.addSound("snare", 250.0, 0.6f, 80, 50);     // Snare - sharper attack, shorter decay
-    soundManager.addSound("hihat", 1000.0, 0.4f, 30, 15);    // Hi-hat - very short, high frequency with quick decay
-    soundManager.addSound("tom1", 140.0, 0.65f, 100, 70);    // High tom - medium duration, pronounced attack
-    soundManager.addSound("tom2", 100.0, 0.7f, 150, 90);     // Low tom - longer duration, stronger sound
-    soundManager.addSound("crash", 900.0, 0.5f, 300, 250);   // Crash cymbal - longer decay, more sustained
-    soundManager.addSound("ride", 750.0, 0.45f, 200, 180);   // Ride cymbal - controlled decay
-    soundManager.addSound("clap", 600.0, 0.55f, 40, 20);     // Hand clap - very short, sharp attack
-    
+    soundManager.addSound("kick0", 50.00, 0.8f, 120, 80);     // Bass drum - deeper sound, strong attack, short decay
+    soundManager.addSound("kick1", 55.00, 0.8f, 120, 80);     // Bass drum - deeper sound, strong attack, short decay
+    soundManager.addSound("kick2", 60.00, 0.8f, 120, 80);     // Bass drum - deeper sound, strong attack, short decay
+    soundManager.addSound("kick3", 65.00, 0.8f, 120, 80);     // Bass drum - deeper sound, strong attack, short decay
+    soundManager.addSound("kick4", 70.00, 0.8f, 120, 80);     // Bass drum - deeper sound, strong attack, short decay
+    soundManager.addSound("kick5", 75.00, 0.8f, 120, 80);     // Bass drum - deeper sound, strong attack, short decay
+    soundManager.addSound("kick6", 80.00, 0.8f, 120, 80);     // Bass drum - deeper sound, strong attack, short decay
+    soundManager.addSound("kick7", 85.00, 0.8f, 120, 80);     // Bass drum - deeper sound, strong attack, short decay
+
     // Main loop flag
     bool quit = false;
     
@@ -270,6 +270,11 @@ int main(int argc, char* argv[]) {
     SDL_Log("NumPad 2-9 keys for drum sounds (Kick, Snare, HiHat, Toms, Cymbals, Clap)");
     SDL_Log("Press M to increase all frequencies by 200 Hz");
     SDL_Log("Press N to decrease all frequencies by 200 Hz");
+    SDL_Log("Press V to decrease delay by 10ms");
+    SDL_Log("Press B to increase delay by 10ms");
+    
+    // While application is running
+    int currentDelay = DEFAULT_DELAY_MS; // Variable to store the current delay
     
     // While application is running
     while (!quit) {
@@ -374,6 +379,22 @@ int main(int argc, char* argv[]) {
                             updateAllSoundFrequencies();
                         }
                         break;
+                        
+                    case SDLK_V:
+                        // Decrease delay by 10ms
+                        if (currentDelay > MIN_DELAY_MS) {
+                            currentDelay -= DELAY_STEP_MS;
+                            SDL_Log("Delay decreased to %d ms", currentDelay);
+                        }
+                        break;
+                        
+                    case SDLK_B:
+                        // Increase delay by 10ms
+                        if (currentDelay < MAX_DELAY_MS) {
+                            currentDelay += DELAY_STEP_MS;
+                            SDL_Log("Delay increased to %d ms", currentDelay);
+                        }
+                        break;
                 }
             }
             // User releases a key
@@ -415,7 +436,7 @@ int main(int argc, char* argv[]) {
         SDL_RenderPresent(renderer);
         
         // Small delay to reduce CPU usage
-        SDL_Delay(DELAY_MS);
+        SDL_Delay(currentDelay);
     }
     
     // Clean up
