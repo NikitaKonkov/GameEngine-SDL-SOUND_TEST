@@ -92,6 +92,39 @@ void handleChordKeyEvent(SoundManager &soundManager, bool isKeyDown) {
     SDL_Log(isKeyDown ? "Playing C major chord" : "C major chord released");
 }
 
+// Helper function to handle drum key events
+void handleDrumKeyEvent(SoundManager &soundManager, int key, bool isKeyDown) {
+    std::string drumName;
+    
+    // Map numeric keypad keys to different drum sounds
+    switch (key) {
+        case SDLK_KP_2: drumName = "kick"; break;       // Bass drum
+        case SDLK_KP_3: drumName = "snare"; break;      // Snare drum
+        case SDLK_KP_4: drumName = "hihat"; break;      // Hi-hat
+        case SDLK_KP_5: drumName = "tom1"; break;       // High tom
+        case SDLK_KP_6: drumName = "tom2"; break;       // Mid tom
+        case SDLK_KP_7: drumName = "crash"; break;      // Crash cymbal
+        case SDLK_KP_8: drumName = "ride"; break;       // Ride cymbal
+        case SDLK_KP_9: drumName = "clap"; break;       // Hand clap
+        default: return; // Unknown key, don't process
+    }
+    
+    // Only process key down events for drums (ignore key up)
+    if (isKeyDown) {
+        // Play the drum sound but don't record it as a continuous sound
+        soundManager.playSound(drumName);
+        SDL_Log("Drum hit: %s", drumName.c_str());
+        
+        // For recording purposes, we need to record both key down and immediate key up events
+        // This ensures drums don't play continuously during playback
+        if (soundManager.isCurrentlyRecording()) {
+            soundManager.recordKeyDown(drumName);
+            // Immediately record key up to prevent continuous playback
+            soundManager.recordKeyUp(drumName);
+        }
+    }
+}
+
 int main(int argc, char* argv[]) {
     // Initialize SDL with both video and audio
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) {
@@ -137,38 +170,64 @@ int main(int argc, char* argv[]) {
     
     // Define a sequence of frequencies for musical notes - expanded to include deeper notes
     std::vector<double> frequencies = {
-        65.41,  // C2
-        69.30,  // C#2/Db2
-        73.42,  // D2
-        77.78,  // D#2/Eb2
-        82.41,  // E2
-        87.31,  // F2
-        92.50,  // F#2/Gb2
-        97.99,  // G2
-        103.83, // G#2/Ab2
-        110.00, // A2
-        116.54, // A#2/Bb2
-        123.47, // B2
-        130.81, // C3
-        138.59, // C#3/Db3
-        146.83, // D3
-        155.56, // D#3/Eb3
-        164.81, // E3
-        174.61, // F3
-        184.99, // F#3/Gb3
-        195.99, // G3
-        207.65, // G#3/Ab3
-        220.00, // A3
-        233.08, // A#3/Bb3
-        246.94, // B3
-        261.63, // C4
-        277.18, // C#4/Db4
-        293.66, // D4
-        311.13  // D#4/Eb4
+        65.0,  // C2
+        70.0,  // C#2/Db2
+        75.0,  // D2
+        80.0,  // D#2/Eb2
+        85.0,  // E2
+        90.0,  // F2
+        95.0,  // F#2/Gb2
+        100.0,  // G2
+        105.0, // G#2/Ab2
+        110.0, // A2
+        115.0, // A#2/Bb2
+        120.0, // B2
+        125.0, // C3
+        130.0, // C#3/Db3
+        135.0, // D3
+        140.0, // D#3/Eb3
+        145.0, // E3
+        150.0, // F3
+        155.0, // F#3/Gb3
+        160.0, // G3
+        165.0, // G#3/Ab3
+        170.0, // A3
+        175.0, // A#3/Bb3
+        180.0, // B3
+        185.0, // C4
+        190.0, // C#4/Db4
+        195.0, // D4
+        200.0  // D#4/Eb4
     };
+    
+    // Base frequencies to be able to reset or modify the scale
+    const std::vector<double> baseFrequencies = frequencies;
+    
+    // Frequency adjustment amount
+    const double FREQ_ADJUSTMENT = 5.0;
+    
+    // Current frequency shift (to track how much we've adjusted)
+    double currentFreqShift = 0.0;
     
     // Create the sound manager
     SoundManager soundManager(audioDevice);
+    
+    // Function to update all sound frequencies
+    auto updateAllSoundFrequencies = [&]() {
+        // Remove all existing note sounds
+        for (size_t i = 0; i < frequencies.size(); i++) {
+            std::string noteName = "note" + std::to_string(i);
+            soundManager.removeSound(noteName);
+        }
+        
+        // Add sounds with new frequencies
+        for (size_t i = 0; i < frequencies.size(); i++) {
+            std::string noteName = "note" + std::to_string(i);
+            soundManager.addSound(noteName, frequencies[i], 0.3f, 500, 100);
+        }
+        
+        SDL_Log("Frequency shift: %.1f Hz", currentFreqShift);
+    };
     
     // Add sounds for each note with 100ms fadeout
     for (size_t i = 0; i < frequencies.size(); i++) {
@@ -180,6 +239,17 @@ int main(int argc, char* argv[]) {
     soundManager.addSound("chord1", 130.81, 0.2f, 5000, 200); // C3 for 3 seconds, 200ms fadeout
     soundManager.addSound("chord2", 164.81, 0.2f, 5000, 200); // E3 for 3 seconds, 200ms fadeout 
     soundManager.addSound("chord3", 195.99, 0.2f, 5000, 200); // G3 for 3 seconds, 200ms fadeout
+    
+    // Add drum sounds with appropriate characteristics
+    // Each drum has unique frequency, gain, duration and fadeout parameters to create different percussive sounds
+    soundManager.addSound("kick", 60.00, 0.8f, 120, 80);     // Bass drum - deeper sound, strong attack, short decay
+    soundManager.addSound("snare", 250.0, 0.6f, 80, 50);     // Snare - sharper attack, shorter decay
+    soundManager.addSound("hihat", 1000.0, 0.4f, 30, 15);    // Hi-hat - very short, high frequency with quick decay
+    soundManager.addSound("tom1", 140.0, 0.65f, 100, 70);    // High tom - medium duration, pronounced attack
+    soundManager.addSound("tom2", 100.0, 0.7f, 150, 90);     // Low tom - longer duration, stronger sound
+    soundManager.addSound("crash", 900.0, 0.5f, 300, 250);   // Crash cymbal - longer decay, more sustained
+    soundManager.addSound("ride", 750.0, 0.45f, 200, 180);   // Ride cymbal - controlled decay
+    soundManager.addSound("clap", 600.0, 0.55f, 40, 20);     // Hand clap - very short, sharp attack
     
     // Main loop flag
     bool quit = false;
@@ -203,6 +273,9 @@ int main(int argc, char* argv[]) {
     SDL_Log("Press A to quit");
     SDL_Log("Scroll mouse wheel up/down to adjust volume");
     SDL_Log("You can play multiple notes simultaneously - each press creates a new sound instance");
+    SDL_Log("NumPad 2-9 keys for drum sounds (Kick, Snare, HiHat, Toms, Cymbals, Clap)");
+    SDL_Log("Press M to increase all frequencies by 200 Hz");
+    SDL_Log("Press N to decrease all frequencies by 200 Hz");
     
     // While application is running
     while (!quit) {
@@ -277,6 +350,38 @@ int main(int argc, char* argv[]) {
                     case SDLK_KP_1:
                         handleChordKeyEvent(soundManager, true);
                         break;
+                        
+                    // Handle NumPad keys for drum sounds
+                    case SDLK_KP_2: case SDLK_KP_3: case SDLK_KP_4:
+                    case SDLK_KP_5: case SDLK_KP_6: case SDLK_KP_7:
+                    case SDLK_KP_8: case SDLK_KP_9:
+                        handleDrumKeyEvent(soundManager, e.key.key, true);
+                        break;
+                        
+                    case SDLK_M:
+                        // Increase all frequencies by 200 Hz
+                        currentFreqShift += FREQ_ADJUSTMENT;
+                        for (size_t i = 0; i < frequencies.size(); i++) {
+                            frequencies[i] = baseFrequencies[i] + currentFreqShift;
+                        }
+                        updateAllSoundFrequencies();
+                        break;
+                        
+                    case SDLK_N:
+                        // Decrease all frequencies by 200 Hz, but don't go below 20 Hz
+                        if (currentFreqShift >= FREQ_ADJUSTMENT) {
+                            currentFreqShift -= FREQ_ADJUSTMENT;
+                            for (size_t i = 0; i < frequencies.size(); i++) {
+                                frequencies[i] = baseFrequencies[i] + currentFreqShift;
+                            }
+                            updateAllSoundFrequencies();
+                        } else if (currentFreqShift > 0) {
+                            // Reset to base frequencies if we can't decrease by full amount
+                            currentFreqShift = 0;
+                            frequencies = baseFrequencies;
+                            updateAllSoundFrequencies();
+                        }
+                        break;
                 }
             }
             // User releases a key
@@ -294,6 +399,8 @@ int main(int argc, char* argv[]) {
                     case SDLK_KP_1:
                         handleChordKeyEvent(soundManager, false);
                         break;
+                        
+                    // Note: We're not handling key up events for drums - they play once and stop
                 }
             }
         }

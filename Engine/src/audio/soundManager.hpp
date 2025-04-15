@@ -91,4 +91,7 @@ public:
     
     // Load recorded events from a file
     bool loadRecordingFromFile(const std::string& filename);
+    
+    // Add a new method to remove a sound
+    bool removeSound(const std::string& name);
 };

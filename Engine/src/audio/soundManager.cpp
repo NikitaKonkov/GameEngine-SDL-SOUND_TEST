@@ -52,6 +52,18 @@ bool SoundManager::playSound(const std::string& name, int durationMs) {
     return true;
 }
 
+bool SoundManager::removeSound(const std::string& name) {
+    auto it = sounds.find(name);
+    if (it == sounds.end()) {
+        // Sound doesn't exist
+        return false;
+    }
+    
+    // Remove the sound
+    sounds.erase(it);
+    return true;
+}
+
 bool SoundManager::recordKeyDown(const std::string& name) {
     auto it = sounds.find(name);
     if (it == sounds.end()) {
@@ -232,6 +244,13 @@ void SoundManager::updateContinuousPlayback() {
         
         // Skip keys that aren't being held down
         if (!isKeyDown) {
+            continue;
+        }
+        
+        // Skip drum sounds - they should not continuously play
+        if (name == "kick" || name == "snare" || name == "hihat" || 
+            name == "tom1" || name == "tom2" || name == "crash" || 
+            name == "ride" || name == "clap") {
             continue;
         }
         
