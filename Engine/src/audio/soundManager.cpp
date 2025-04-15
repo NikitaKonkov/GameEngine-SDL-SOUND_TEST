@@ -247,13 +247,6 @@ void SoundManager::updateContinuousPlayback() {
             continue;
         }
         
-        // Skip drum sounds - they should not continuously play
-        if (name == "kick" || name == "snare" || name == "hihat" || 
-            name == "tom1" || name == "tom2" || name == "crash" || 
-            name == "ride" || name == "clap") {
-            continue;
-        }
-        
         // Check if we need to initialize timing for this key
         if (keyPressTime.find(name) == keyPressTime.end()) {
             // First encounter with this key - initialize timing data

@@ -109,19 +109,13 @@ void handleDrumKeyEvent(SoundManager &soundManager, int key, bool isKeyDown) {
         default: return; // Unknown key, don't process
     }
     
-    // Only process key down events for drums (ignore key up)
+    // Process both key down and key up events for drums, just like chords
     if (isKeyDown) {
-        // Play the drum sound but don't record it as a continuous sound
-        soundManager.playSound(drumName);
+        soundManager.recordKeyDown(drumName);
         SDL_Log("Drum hit: %s", drumName.c_str());
-        
-        // For recording purposes, we need to record both key down and immediate key up events
-        // This ensures drums don't play continuously during playback
-        if (soundManager.isCurrentlyRecording()) {
-            soundManager.recordKeyDown(drumName);
-            // Immediately record key up to prevent continuous playback
-            soundManager.recordKeyUp(drumName);
-        }
+    } else {
+        soundManager.recordKeyUp(drumName);
+        SDL_Log("Drum released: %s", drumName.c_str());
     }
 }
 
@@ -349,13 +343,11 @@ int main(int argc, char* argv[]) {
 
                     case SDLK_KP_1:
                         handleChordKeyEvent(soundManager, true);
-                        break;
-                        
-                    // Handle NumPad keys for drum sounds
                     case SDLK_KP_2: case SDLK_KP_3: case SDLK_KP_4:
                     case SDLK_KP_5: case SDLK_KP_6: case SDLK_KP_7:
                     case SDLK_KP_8: case SDLK_KP_9:
                         handleDrumKeyEvent(soundManager, e.key.key, true);
+
                         break;
                         
                     case SDLK_M:
@@ -400,7 +392,11 @@ int main(int argc, char* argv[]) {
                         handleChordKeyEvent(soundManager, false);
                         break;
                         
-                    // Note: We're not handling key up events for drums - they play once and stop
+                    case SDLK_KP_2: case SDLK_KP_3: case SDLK_KP_4:
+                    case SDLK_KP_5: case SDLK_KP_6: case SDLK_KP_7:
+                    case SDLK_KP_8: case SDLK_KP_9:
+                        handleDrumKeyEvent(soundManager, e.key.key, false);
+                        break;
                 }
             }
         }
