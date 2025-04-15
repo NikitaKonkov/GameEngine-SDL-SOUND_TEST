@@ -7,7 +7,7 @@
 
 // Audio settings
 #define AUDIO_SAMPLE_RATE 48000
-#define AUDIO_CHANNELS 2
+#define AUDIO_CHANNELS 4
 
 // Visualization settings
 #define MAX_VISIBLE_BARS 100
@@ -16,4 +16,4 @@
 #define STATUS_BOX_WIDTH 200
 
 // Mixer settings
-#define DELAY_MS 20
+#define DELAY_MS 400

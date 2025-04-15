@@ -26,7 +26,46 @@ std::string generateFilename() {
 
 // Helper function to handle note key events
 void handleNoteKeyEvent(SoundManager &soundManager, const std::vector<double> &frequencies, int key, bool isKeyDown) {
-    int noteIndex = key - SDLK_1;
+    int noteIndex = 0;
+    
+    // Handle numeric keys 1-9
+    if (key >= SDLK_1 && key <= SDLK_9) {
+        noteIndex = key - SDLK_1;
+    }
+    // Handle letter keys for additional notes
+    else {
+        // Map QWERTZUIOPASDFGHJKL to note indices starting after the number keys
+        switch (key) {
+            case SDLK_Q: noteIndex = 9; break;
+            case SDLK_W: noteIndex = 10; break;
+            case SDLK_E: noteIndex = 11; break;
+            case SDLK_R: noteIndex = 12; break;
+            case SDLK_T: noteIndex = 13; break;
+            case SDLK_Z: noteIndex = 14; break;  // Z for QWERTZ layout
+            case SDLK_Y: noteIndex = 14; break;  // Y for QWERTY layout (alternative)
+            case SDLK_U: noteIndex = 15; break;
+            case SDLK_I: noteIndex = 16; break;
+            case SDLK_O: noteIndex = 17; break;
+            case SDLK_P: noteIndex = 18; break;
+            case SDLK_A: noteIndex = 19; break;
+            case SDLK_S: noteIndex = 20; break;
+            case SDLK_D: noteIndex = 21; break;
+            case SDLK_F: noteIndex = 22; break;
+            case SDLK_G: noteIndex = 23; break;
+            case SDLK_H: noteIndex = 24; break;
+            case SDLK_J: noteIndex = 25; break;
+            case SDLK_K: noteIndex = 26; break;
+            case SDLK_L: noteIndex = 27; break;
+            default: return; // Unknown key, don't process
+        }
+    }
+    
+    // Ensure we don't access frequencies out of bounds
+    if (noteIndex >= frequencies.size()) {
+        SDL_Log("Note index %d out of bounds (max: %zu)", noteIndex, frequencies.size() - 1);
+        return;
+    }
+    
     std::string noteName = "note" + std::to_string(noteIndex);
 
     if (isKeyDown) {
@@ -96,18 +135,36 @@ int main(int argc, char* argv[]) {
         return -1;
     }
     
-    // Define a sequence of frequencies for musical notes
+    // Define a sequence of frequencies for musical notes - expanded to include deeper notes
     std::vector<double> frequencies = {
-        247.48, // B3
+        65.41,  // C2
+        69.30,  // C#2/Db2
+        73.42,  // D2
+        77.78,  // D#2/Eb2
+        82.41,  // E2
+        87.31,  // F2
+        92.50,  // F#2/Gb2
+        97.99,  // G2
+        103.83, // G#2/Ab2
+        110.00, // A2
+        116.54, // A#2/Bb2
+        123.47, // B2
+        130.81, // C3
+        138.59, // C#3/Db3
+        146.83, // D3
+        155.56, // D#3/Eb3
+        164.81, // E3
+        174.61, // F3
+        184.99, // F#3/Gb3
+        195.99, // G3
+        207.65, // G#3/Ab3
+        220.00, // A3
+        233.08, // A#3/Bb3
+        246.94, // B3
         261.63, // C4
+        277.18, // C#4/Db4
         293.66, // D4
-        329.63, // E4
-        349.23, // F4
-        392.00, // G4
-        440.00, // A4
-        493.88, // B4
-        523.25, // C5
-        554.37, // C#5
+        311.13  // D#4/Eb4
     };
     
     // Create the sound manager
@@ -120,9 +177,9 @@ int main(int argc, char* argv[]) {
     }
     
     // Create a chord sound with 200ms fadeout for smoother chord endings
-    soundManager.addSound("chord1", 261.63, 0.2f, 5000, 200); // C4 for 3 seconds, 200ms fadeout
-    soundManager.addSound("chord2", 329.63, 0.2f, 5000, 200); // E4 for 3 seconds, 200ms fadeout 
-    soundManager.addSound("chord3", 392.00, 0.2f, 5000, 200); // G4 for 3 seconds, 200ms fadeout
+    soundManager.addSound("chord1", 130.81, 0.2f, 5000, 200); // C3 for 3 seconds, 200ms fadeout
+    soundManager.addSound("chord2", 164.81, 0.2f, 5000, 200); // E3 for 3 seconds, 200ms fadeout 
+    soundManager.addSound("chord3", 195.99, 0.2f, 5000, 200); // G3 for 3 seconds, 200ms fadeout
     
     // Main loop flag
     bool quit = false;
@@ -210,6 +267,10 @@ int main(int argc, char* argv[]) {
                         
                     case SDLK_1: case SDLK_2: case SDLK_3: case SDLK_4:
                     case SDLK_5: case SDLK_6: case SDLK_7: case SDLK_8: case SDLK_9:
+                    case SDLK_Q: case SDLK_W: case SDLK_E: case SDLK_R: case SDLK_T: 
+                    case SDLK_Z: case SDLK_U: case SDLK_I: case SDLK_O: case SDLK_P:
+                    case SDLK_A: case SDLK_S: case SDLK_D: case SDLK_F: case SDLK_G: 
+                    case SDLK_H: case SDLK_J: case SDLK_K: case SDLK_L:
                         handleNoteKeyEvent(soundManager, frequencies, e.key.key, true);
                         break;
 
@@ -223,6 +284,10 @@ int main(int argc, char* argv[]) {
                 switch (e.key.key) {
                     case SDLK_1: case SDLK_2: case SDLK_3: case SDLK_4:
                     case SDLK_5: case SDLK_6: case SDLK_7: case SDLK_8: case SDLK_9:
+                    case SDLK_Q: case SDLK_W: case SDLK_E: case SDLK_R: case SDLK_T: 
+                    case SDLK_Z: case SDLK_U: case SDLK_I: case SDLK_O: case SDLK_P:
+                    case SDLK_A: case SDLK_S: case SDLK_D: case SDLK_F: case SDLK_G: 
+                    case SDLK_H: case SDLK_J: case SDLK_K: case SDLK_L:
                         handleNoteKeyEvent(soundManager, frequencies, e.key.key, false);
                         break;
 
